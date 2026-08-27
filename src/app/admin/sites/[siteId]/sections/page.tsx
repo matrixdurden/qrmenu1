@@ -1,13 +1,13 @@
 import { notFound } from "next/navigation";
 import { createSection, deleteSection, updateSection } from "@/app/admin/site-actions";
+import { getAdminSiteSections } from "@/lib/admin-queries";
 import { requireSiteAdmin } from "@/lib/auth";
-import { getAdminSite } from "@/lib/queries";
 import { parseSectionConfig, SECTION_LABELS, SECTION_TYPES } from "@/lib/sections";
 
 export default async function SectionsPage({ params }: { params: Promise<{ siteId: string }> }) {
   const { siteId } = await params;
   await requireSiteAdmin(siteId);
-  const data = await getAdminSite(siteId);
+  const data = await getAdminSiteSections(siteId);
   if (!data) notFound();
   const { site, sections } = data;
 
