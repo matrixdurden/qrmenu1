@@ -5,6 +5,8 @@ node_modules
 .env.*.local
 .tools
 uploads
+backups
+*.dump
 *.log
 *.tsbuildinfo
 .DS_Store
