@@ -16,7 +16,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: feature/complete-platform
-      - name: Fix React 19 favorites hydration and intentional native image lint
+      - name: Fix React favorites effect and image lint
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -26,32 +26,30 @@ jobs:
           if not text.startswith('/* eslint-disable @next/next/no-img-element */'):
               text = text.replace('"use client";\n', '/* eslint-disable @next/next/no-img-element */\n"use client";\n', 1)
           text = text.replace('type Product = MenuData["products"][number];\n', '', 1)
-          old = '''  useEffect(() => {
-            try {
-              const stored = localStorage.getItem(`qrmenu:favorites:${site.id}`);
-              if (stored) setFavorites(new Set(JSON.parse(stored) as string[]));
-            } catch {
-              setFavorites(new Set());
-            } finally {
-              setFavoritesReady(true);
-            }
-          }, [site.id]);'''
-          new = '''  useEffect(() => {
-            const frame = requestAnimationFrame(() => {
-              try {
-                const stored = localStorage.getItem(`qrmenu:favorites:${site.id}`);
-                if (stored) setFavorites(new Set(JSON.parse(stored) as string[]));
-              } catch {
-                setFavorites(new Set());
-              } finally {
-                setFavoritesReady(true);
-              }
-            });
-            return () => cancelAnimationFrame(frame);
-          }, [site.id]);'''
-          if old not in text:
-              raise SystemExit('Favorites effect block not found')
-          text = text.replace(old, new, 1)
+
+          start_marker = '  useEffect(() => {\n    try {\n      const stored = localStorage.getItem(`qrmenu:favorites:${site.id}`);'
+          end_marker = '  }, [site.id]);'
+          start = text.find(start_marker)
+          if start < 0:
+              raise SystemExit('Favorites effect start not found')
+          end = text.find(end_marker, start)
+          if end < 0:
+              raise SystemExit('Favorites effect end not found')
+          end += len(end_marker)
+          replacement = '''  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      try {
+        const stored = localStorage.getItem(`qrmenu:favorites:${site.id}`);
+        if (stored) setFavorites(new Set(JSON.parse(stored) as string[]));
+      } catch {
+        setFavorites(new Set());
+      } finally {
+        setFavoritesReady(true);
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [site.id]);'''
+          text = text[:start] + replacement + text[end:]
           menu.write_text(text)
 
           qr = Path('src/app/admin/sites/[siteId]/qr/page.tsx')
