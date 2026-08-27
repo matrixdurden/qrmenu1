@@ -2,6 +2,7 @@ services:
   app:
     image: mcr.microsoft.com/devcontainers/javascript-node:24-bookworm
     command: sleep infinity
+    working_dir: /workspaces/qrmenu1
     volumes:
       - ..:/workspaces/qrmenu1:cached
     environment:
