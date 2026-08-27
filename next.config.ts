@@ -36,7 +36,7 @@ const nextConfig: NextConfig = {
         allowedDevOrigins: [codespacesOriginPattern],
         experimental: {
           serverActions: {
-            allowedOrigins: [codespacesOriginPattern],
+            allowedOrigins: ["localhost:3000", "127.0.0.1:3000", codespacesOriginPattern],
           },
         },
       }

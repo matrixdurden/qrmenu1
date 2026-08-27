@@ -58,5 +58,41 @@ jobs:
       - name: Verify migrations
         run: npm run db:migrate
 
+      - name: Verify Codespaces Server Action proxy
+        env:
+          GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN: app.github.dev
+          NEXT_PUBLIC_APP_URL: https://test-codespace-3000.app.github.dev
+        run: |
+          nohup npm run dev -- -H 127.0.0.1 > /tmp/qrmenu-dev.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3000/api/health >/dev/null; then
+              break
+            fi
+            if [[ "$attempt" == "60" ]]; then
+              cat /tmp/qrmenu-dev.log
+              exit 1
+            fi
+            sleep 1
+          done
+
+          curl -fsS http://127.0.0.1:3000/admin/setup -o /tmp/setup.html
+          ACTION_NAME=$(grep -o 'name="\$ACTION_ID_[^"]*"' /tmp/setup.html | head -n1 | sed 's/^name="//;s/"$//')
+          test -n "$ACTION_NAME"
+
+          STATUS=$(curl -sS -o /tmp/action-body -w '%{http_code}' \
+            -X POST http://127.0.0.1:3000/admin/setup \
+            -H 'Origin: http://localhost:3000' \
+            -H 'X-Forwarded-Host: test-codespace-3000.app.github.dev' \
+            -F "$ACTION_NAME=" \
+            -F 'email=codespace-smoke@example.com' \
+            -F 'password=CodespaceSmoke123!' \
+            -F 'confirmPassword=CodespaceSmoke123!')
+
+          test "$STATUS" != "500"
+          ! grep -q 'Invalid Server Actions request' /tmp/action-body
+
       - name: Lint, typecheck, unit tests and build
         run: npm run check
