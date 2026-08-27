@@ -39,4 +39,17 @@ CREATE INDEX "admin_audit_user_idx" ON "admin_audit_logs" USING btree ("user_id"
 CREATE UNIQUE INDEX "admin_site_access_unique_idx" ON "admin_site_access" USING btree ("user_id","site_id");--> statement-breakpoint
 CREATE INDEX "admin_site_access_site_idx" ON "admin_site_access" USING btree ("site_id");--> statement-breakpoint
 CREATE INDEX "auth_rate_limits_blocked_idx" ON "auth_rate_limits" USING btree ("blocked_until");--> statement-breakpoint
-CREATE UNIQUE INDEX "sites_custom_domain_idx" ON "sites" USING btree ("custom_domain");
+CREATE UNIQUE INDEX "sites_custom_domain_idx" ON "sites" USING btree ("custom_domain");--> statement-breakpoint
+UPDATE "site_sections" SET "sort_order" = "sort_order" + 1 WHERE "sort_order" >= 3;--> statement-breakpoint
+INSERT INTO "site_sections" ("site_id", "type", "label", "is_visible", "sort_order", "config")
+SELECT "id", 'featured', 'Öne çıkanlar', true, 3, '{"title":"Öne çıkanlar","eyebrow":"SEÇKİ"}'::jsonb
+FROM "sites"
+WHERE NOT EXISTS (
+	SELECT 1 FROM "site_sections" WHERE "site_sections"."site_id" = "sites"."id" AND "site_sections"."type" = 'featured'
+);--> statement-breakpoint
+INSERT INTO "site_sections" ("site_id", "type", "label", "is_visible", "sort_order", "config")
+SELECT "id", 'announcement', 'Duyuru', false, 99, '{"title":"Duyuru","body":"Güncel duyurunuzu buraya yazın."}'::jsonb
+FROM "sites"
+WHERE NOT EXISTS (
+	SELECT 1 FROM "site_sections" WHERE "site_sections"."site_id" = "sites"."id" AND "site_sections"."type" = 'announcement'
+);
