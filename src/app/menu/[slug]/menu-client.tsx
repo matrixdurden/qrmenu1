@@ -171,7 +171,7 @@ export default function MenuClient({ data }: { data: MenuData }) {
     return <div className={`menu-products ${site.theme.productLayout === "list" ? "list" : ""}`}>
       {rows.map((product) => (
         <article className={`menu-product-card ${product.isAvailable ? "" : "unavailable"}`} key={product.id} onClick={() => setSelectedId(product.id)}>
-          <div className="product-picture" style={product.imageUrl ? { backgroundImage: `url(${product.imageUrl})` } : undefined}>
+          <div className="product-picture">{product.imageUrl ? <img className="media-image" src={product.imageUrl} alt="" loading="lazy" decoding="async" /> : null}
             {!product.isAvailable ? <span className="product-badge sold-out">{terminology.soldOutLabel || copy.soldOut}</span> : product.badge ? <span className="product-badge">{product.badge}</span> : null}
             {showFavorites ? <button type="button" aria-label="Favori" className={`fav ${favorites.has(product.id) ? "active" : ""}`} onClick={(event) => { event.stopPropagation(); setFavorites((prev) => { const next = new Set(prev); if (next.has(product.id)) next.delete(product.id); else next.add(product.id); return next; }); }}><Heart size={18} fill={favorites.has(product.id) ? "currentColor" : "none"} /></button> : null}
           </div>
@@ -186,7 +186,7 @@ export default function MenuClient({ data }: { data: MenuData }) {
   const categoriesBlock = <div className="category-area">
     <div className="category-strip category-strip-rich">
       <button type="button" className={!activeCategory ? "category-pill active" : "category-pill"} onClick={() => setActiveCategory(null)}>{copy.all}</button>
-      {rootCategories.map((category) => <button type="button" key={category.id} className={activeCategory === category.id ? "category-pill active" : "category-pill"} onClick={() => setActiveCategory(category.id)}>{category.imageUrl ? <span className="category-pill-image" style={{ backgroundImage: `url(${category.imageUrl})` }} /> : null}<span>{category.name}</span></button>)}
+      {rootCategories.map((category) => <button type="button" key={category.id} className={activeCategory === category.id ? "category-pill active" : "category-pill"} onClick={() => setActiveCategory(category.id)}>{category.imageUrl ? <img className="category-pill-image" src={category.imageUrl} alt="" loading="lazy" decoding="async" /> : null}<span>{category.name}</span></button>)}
     </div>
     {subCategories.length ? <div className="subcategory-strip">{subCategories.map((category) => <button type="button" key={category.id} className={activeCategory === category.id ? "subcategory-pill active" : "subcategory-pill"} onClick={() => setActiveCategory(category.id)}>{category.name}</button>)}</div> : null}
   </div>;
@@ -226,7 +226,7 @@ export default function MenuClient({ data }: { data: MenuData }) {
     if (section.type === "gallery") {
       const items = config.items ?? [];
       if (!items.length) return null;
-      return <section className="menu-section"><div className="section-title"><div>{config.eyebrow ? <span className="eyebrow">{config.eyebrow}</span> : null}<h2>{config.title || "Galeri"}</h2></div></div><div className={`menu-gallery ${config.layout || "grid"}`}>{items.map((item, index) => { const href = safeHref(item.url); const tile = <div className="gallery-tile" style={item.imageUrl ? { backgroundImage: `url(${item.imageUrl})` } : undefined}><div>{item.title ? <strong>{item.title}</strong> : null}{item.text ? <span>{item.text}</span> : null}</div></div>; return href ? <a href={href} target={href.startsWith("http") ? "_blank" : undefined} rel="noreferrer" key={index}>{tile}</a> : <Fragment key={index}>{tile}</Fragment>; })}</div></section>;
+      return <section className="menu-section"><div className="section-title"><div>{config.eyebrow ? <span className="eyebrow">{config.eyebrow}</span> : null}<h2>{config.title || "Galeri"}</h2></div></div><div className={`menu-gallery ${config.layout || "grid"}`}>{items.map((item, index) => { const href = safeHref(item.url); const tile = <div className="gallery-tile">{item.imageUrl ? <img className="media-image" src={item.imageUrl} alt="" loading="lazy" decoding="async" /> : null}<div>{item.title ? <strong>{item.title}</strong> : null}{item.text ? <span>{item.text}</span> : null}</div></div>; return href ? <a href={href} target={href.startsWith("http") ? "_blank" : undefined} rel="noreferrer" key={index}>{tile}</a> : <Fragment key={index}>{tile}</Fragment>; })}</div></section>;
     }
     if (section.type === "links") {
       const items = (config.items ?? []).filter((item) => safeHref(item.url));
@@ -258,7 +258,7 @@ export default function MenuClient({ data }: { data: MenuData }) {
             {(site.theme.showLanguage ?? true) && locales.length > 1 ? <div className="language-switcher">{locales.map((item) => <button type="button" key={item} className={item === locale ? "active" : ""} onClick={() => setLocale(item)}>{item.split("-")[0].toUpperCase()}</button>)}</div> : null}
           </div>
           <div className="hero-copy">
-            {site.logoUrl ? <img className="menu-logo" src={site.logoUrl} alt="" /> : null}
+            {site.logoUrl ? <img className="menu-logo" src={site.logoUrl} alt="" decoding="async" /> : null}
             <h1>{localizedSite.name}</h1><p>{localizedSite.subtitle}</p>
           </div>
         </header> : <header className="minimal-menu-header"><div><h1>{localizedSite.name}</h1><p>{localizedSite.subtitle}</p></div><span className={status.open ? "mini-status open" : "mini-status"}>{status.open ? copy.open : copy.closed}</span></header>}
@@ -266,7 +266,7 @@ export default function MenuClient({ data }: { data: MenuData }) {
         <div className="menu-content">{bodySections.map((section) => <Fragment key={section.id}>{renderSection(section)}</Fragment>)}</div>
       </div>
 
-      {selected ? <div className="modal-backdrop" onClick={() => setSelectedId(null)}><div className="product-modal" role="dialog" aria-modal="true" aria-label={selected.name} onClick={(event) => event.stopPropagation()}><button type="button" className="modal-close" onClick={() => setSelectedId(null)} aria-label="Kapat"><X /></button><div className="modal-image" style={selected.imageUrl ? { backgroundImage: `url(${selected.imageUrl})` } : undefined} /><div className="modal-copy">{!selected.isAvailable ? <span className="product-badge inline sold-out">{terminology.soldOutLabel || copy.soldOut}</span> : selected.badge ? <span className="product-badge inline">{selected.badge}</span> : null}<h2>{selected.name}</h2><div className="modal-prices">{selected.compareAtPriceKurus ? <del>{money(selected.compareAtPriceKurus, site.currency, locale)}</del> : null}<strong className="modal-price">{money(selected.priceKurus, site.currency, locale)}</strong></div><p>{selected.description}</p>{selected.ingredients ? <div className="detail-line"><span>{terminology.ingredientsLabel || copy.ingredients}</span><b>{selected.ingredients}</b></div> : null}{selected.allergens ? <div className="detail-line"><span>{terminology.allergensLabel || copy.allergens}</span><b>{selected.allergens}</b></div> : null}{selected.note ? <div className="detail-line"><span>{copy.note}</span><b>{selected.note}</b></div> : null}</div></div></div> : null}
+      {selected ? <div className="modal-backdrop" onClick={() => setSelectedId(null)}><div className="product-modal" role="dialog" aria-modal="true" aria-label={selected.name} onClick={(event) => event.stopPropagation()}><button type="button" className="modal-close" onClick={() => setSelectedId(null)} aria-label="Kapat"><X /></button><div className="modal-image">{selected.imageUrl ? <img className="media-image" src={selected.imageUrl} alt="" decoding="async" /> : null}</div><div className="modal-copy">{!selected.isAvailable ? <span className="product-badge inline sold-out">{terminology.soldOutLabel || copy.soldOut}</span> : selected.badge ? <span className="product-badge inline">{selected.badge}</span> : null}<h2>{selected.name}</h2><div className="modal-prices">{selected.compareAtPriceKurus ? <del>{money(selected.compareAtPriceKurus, site.currency, locale)}</del> : null}<strong className="modal-price">{money(selected.priceKurus, site.currency, locale)}</strong></div><p>{selected.description}</p>{selected.ingredients ? <div className="detail-line"><span>{terminology.ingredientsLabel || copy.ingredients}</span><b>{selected.ingredients}</b></div> : null}{selected.allergens ? <div className="detail-line"><span>{terminology.allergensLabel || copy.allergens}</span><b>{selected.allergens}</b></div> : null}{selected.note ? <div className="detail-line"><span>{copy.note}</span><b>{selected.note}</b></div> : null}</div></div></div> : null}
     </div>
   );
 }
