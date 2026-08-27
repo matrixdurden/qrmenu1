@@ -93,9 +93,10 @@ export async function createAdminSession(userId: string) {
   const store = await cookies();
   const configuredUrl = process.env.NEXT_PUBLIC_APP_URL;
   const secureCookie = configuredUrl ? configuredUrl.startsWith("https://") : process.env.NODE_ENV === "production";
+  const isCodespaces = Boolean(process.env.CODESPACE_NAME) || Boolean(configuredUrl?.includes(".app.github.dev"));
   store.set(COOKIE_NAME, token, {
     httpOnly: true,
-    sameSite: "strict",
+    sameSite: isCodespaces ? "lax" : "strict",
     secure: secureCookie,
     path: "/",
     expires: expiresAt,
