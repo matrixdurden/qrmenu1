@@ -108,6 +108,12 @@ async function signedStorageRequest(config: StorageConfig, method: "GET" | "PUT"
   const signingKey = hmac(serviceKey, "aws4_request");
   const signature = createHmac("sha256", signingKey).update(stringToSign).digest("hex");
   const authorization = `AWS4-HMAC-SHA256 Credential=${config.accessKey}/${scope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
+  let requestBody: ArrayBuffer | undefined;
+  if (method === "PUT") {
+    const bytes = new Uint8Array(payload.byteLength);
+    bytes.set(payload);
+    requestBody = bytes.buffer as ArrayBuffer;
+  }
 
   return fetch(url, {
     method,
@@ -117,7 +123,7 @@ async function signedStorageRequest(config: StorageConfig, method: "GET" | "PUT"
       "x-amz-date": amzDate,
       Authorization: authorization,
     },
-    body: method === "PUT" ? payload : undefined,
+    body: requestBody,
   });
 }
 
