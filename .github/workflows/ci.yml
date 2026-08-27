@@ -44,6 +44,11 @@ jobs:
           node-version: 24
           cache: npm
 
+      - name: Validate Codespaces configuration
+        run: |
+          node -e "JSON.parse(require('fs').readFileSync('.devcontainer/devcontainer.json', 'utf8'))"
+          docker compose -f .devcontainer/compose.yaml config >/dev/null
+
       - name: Install dependencies
         run: npm ci
 
