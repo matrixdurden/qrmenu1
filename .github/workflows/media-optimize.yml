@@ -1,0 +1,68 @@
+name: One-shot public media optimization
+
+on:
+  push:
+    branches:
+      - feature/complete-platform
+
+permissions:
+  contents: write
+
+jobs:
+  optimize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/complete-platform
+      - name: Convert public menu media to native lazy images
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/app/menu/[slug]/menu-client.tsx')
+          text = path.read_text()
+          replacements = [
+              (
+                  '<div className="product-picture" style={product.imageUrl ? { backgroundImage: `url(${product.imageUrl})` } : undefined}>',
+                  '<div className="product-picture">{product.imageUrl ? <img className="media-image" src={product.imageUrl} alt="" loading="lazy" decoding="async" /> : null}',
+              ),
+              (
+                  '{category.imageUrl ? <span className="category-pill-image" style={{ backgroundImage: `url(${category.imageUrl})` }} /> : null}',
+                  '{category.imageUrl ? <img className="category-pill-image" src={category.imageUrl} alt="" loading="lazy" decoding="async" /> : null}',
+              ),
+              (
+                  '<div className="gallery-tile" style={item.imageUrl ? { backgroundImage: `url(${item.imageUrl})` } : undefined}><div>',
+                  '<div className="gallery-tile">{item.imageUrl ? <img className="media-image" src={item.imageUrl} alt="" loading="lazy" decoding="async" /> : null}<div>',
+              ),
+              (
+                  '<div className="modal-image" style={selected.imageUrl ? { backgroundImage: `url(${selected.imageUrl})` } : undefined} />',
+                  '<div className="modal-image">{selected.imageUrl ? <img className="media-image" src={selected.imageUrl} alt="" decoding="async" /> : null}</div>',
+              ),
+              (
+                  '{site.logoUrl ? <img className="menu-logo" src={site.logoUrl} alt="" /> : null}',
+                  '{site.logoUrl ? <img className="menu-logo" src={site.logoUrl} alt="" decoding="async" /> : null}',
+              ),
+          ]
+          for old, new in replacements:
+              if old not in text:
+                  raise SystemExit(f'Expected menu markup not found: {old[:80]}')
+              text = text.replace(old, new, 1)
+          path.write_text(text)
+
+          css_path = Path('src/app/globals.css')
+          css = css_path.read_text()
+          marker = '/* Native lazy-loaded public media */'
+          if marker not in css:
+              css += '''\n\n/* Native lazy-loaded public media */\n.product-picture, .modal-image, .gallery-tile { position: relative; overflow: hidden; }\n.media-image { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }\n.product-picture > .media-image, .modal-image > .media-image { z-index: 0; }\n.product-picture > :not(.media-image), .modal-image > :not(.media-image) { position: relative; z-index: 1; }\n.gallery-tile > .media-image { z-index: 0; }\n.gallery-tile > div { position: relative; z-index: 1; }\n.category-pill-image { width: 28px; height: 28px; border-radius: 999px; object-fit: cover; flex: 0 0 auto; }\n'''
+              css_path.write_text(css)
+          PY
+      - name: Commit optimization and remove one-shot workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/media-optimize.yml
+          git add 'src/app/menu/[slug]/menu-client.tsx' src/app/globals.css
+          git commit -m "perf: lazy-load public menu media"
+          git push origin HEAD:feature/complete-platform
