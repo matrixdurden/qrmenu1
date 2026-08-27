@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const isProduction = process.env.NODE_ENV === "production";
+const codespacesDomain = process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN?.trim();
+const codespacesOriginPattern = codespacesDomain ? `*.${codespacesDomain}` : null;
+
 const csp = [
   "default-src 'self'",
   `script-src 'self' 'unsafe-inline'${isProduction ? "" : " 'unsafe-eval'"}`,
@@ -28,6 +31,16 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   images: { remotePatterns: [{ protocol: "https", hostname: "images.unsplash.com" }] },
+  ...(codespacesOriginPattern
+    ? {
+        allowedDevOrigins: [codespacesOriginPattern],
+        experimental: {
+          serverActions: {
+            allowedOrigins: [codespacesOriginPattern],
+          },
+        },
+      }
+    : {}),
   async headers() {
     return [{ source: "/(.*)", headers: securityHeaders }];
   },
