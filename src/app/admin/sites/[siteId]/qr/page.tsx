@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 import { notFound } from "next/navigation";
 import { requireSiteAdmin } from "@/lib/auth";
 import { getAdminSiteBasics } from "@/lib/admin-queries";

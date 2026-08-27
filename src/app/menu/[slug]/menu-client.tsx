@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 "use client";
 
 import { Fragment, useEffect, useMemo, useState } from "react";
@@ -7,7 +8,6 @@ import { normalizeLocales, uiCopy } from "@/lib/i18n";
 import { localizedSectionConfig } from "@/lib/sections";
 
 type MenuData = NonNullable<Awaited<ReturnType<typeof getMenuBySlug>>>;
-type Product = MenuData["products"][number];
 type Category = MenuData["categories"][number];
 
 function money(kurus: number, currency: string, locale: string) {
@@ -97,14 +97,17 @@ export default function MenuClient({ data }: { data: MenuData }) {
   const status = businessStatus(hours, site.timezone, copy);
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(`qrmenu:favorites:${site.id}`);
-      if (stored) setFavorites(new Set(JSON.parse(stored) as string[]));
-    } catch {
-      setFavorites(new Set());
-    } finally {
-      setFavoritesReady(true);
-    }
+    const frame = requestAnimationFrame(() => {
+      try {
+        const stored = localStorage.getItem(`qrmenu:favorites:${site.id}`);
+        if (stored) setFavorites(new Set(JSON.parse(stored) as string[]));
+      } catch {
+        setFavorites(new Set());
+      } finally {
+        setFavoritesReady(true);
+      }
+    });
+    return () => cancelAnimationFrame(frame);
   }, [site.id]);
 
   useEffect(() => {
