@@ -28,6 +28,7 @@ PostgreSQL tabanlı, çoklu site destekli ve restoran dışındaki katalog/hizme
 - PostgreSQL backup/restore scriptleri
 - PostgreSQL 18 + Drizzle migration
 - GitHub Actions: dependency audit, migration, lint, typecheck, unit test ve production build
+- GitHub Codespaces için tek tık geliştirme ortamı
 
 ## Admin yapısı
 
@@ -46,10 +47,62 @@ Owner hesapları ayrıca `/admin/users` üzerinden manager hesabı oluşturabili
 
 ## Gereksinimler
 
+Yerel kurulum için:
+
 - Node.js 24+
 - PostgreSQL 18
 
 Repo `.node-version` ile Node 24'ü referans sürüm olarak kullanır. Yerel scriptler önce sistemdeki Node/PostgreSQL araçlarını kullanır; eski kullanıcı-alanı `.tools/node` ve `~/.local/share/qrmenu-postgres` kurulumu varsa fallback olarak desteklenir.
+
+GitHub Codespaces kullanırsanız bilgisayarınıza Node, PostgreSQL veya repo kurmanız gerekmez.
+
+## GitHub Codespaces
+
+Repo `.devcontainer` ile Codespaces için hazırdır. GitHub repo sayfasında:
+
+1. `Code` butonuna basın.
+2. `Codespaces` sekmesini açın.
+3. `Create codespace on main` seçeneğine basın.
+
+İlk Codespace oluşturulurken otomatik olarak:
+
+- Node.js 24 ortamı açılır,
+- PostgreSQL 18 container'ı başlatılır,
+- `.env.local` oluşturulur,
+- `npm ci` çalışır,
+- Drizzle migration'ları uygulanır,
+- veritabanı boşsa MIRA demo verisi yüklenir,
+- Next.js geliştirme sunucusu port `3000` üzerinde otomatik başlatılır,
+- port Codespaces tarafından forward edilir ve tarayıcıda açılır.
+
+Veritabanı named Docker volume üzerinde tutulur; aynı Codespace durdurulup yeniden açıldığında veriler korunur. Setup veritabanında site varsa demo seed'i tekrar çalıştırmaz.
+
+İlk admin hesabı için forwarded uygulama adresinin sonuna `/admin` ekleyin. İlk kurulumda `/admin/setup` ekranı açılır ve oluşturulan ilk kullanıcı `owner` olur.
+
+Demo menü:
+
+```text
+<codespace-url>/menu/mira
+```
+
+Health kontrolü:
+
+```text
+<codespace-url>/api/health
+<codespace-url>/api/ready
+```
+
+Sunucu logunu görmek gerekirse Codespaces terminalinde:
+
+```bash
+cat /tmp/qrmenu-dev.log
+```
+
+Sunucu durmuşsa tekrar başlatmak için:
+
+```bash
+bash .devcontainer/start.sh
+```
 
 ## Environment
 
@@ -61,6 +114,8 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
 Production'da `NEXT_PUBLIC_APP_URL` gerçek HTTPS ana domain olmalıdır. Basılı QR oluşturmadan önce bunu düzeltin.
+
+Codespaces ortamında `.devcontainer/setup.sh`, `NEXT_PUBLIC_APP_URL` değerini Codespaces'ın forwarded HTTPS adresine otomatik ayarlar.
 
 ## Çalıştırma
 
@@ -111,7 +166,7 @@ Yerelde CI ile aynı uygulama kontrollerini çalıştırmak için:
 npm run check
 ```
 
-Bu komut sırasıyla ESLint, TypeScript typecheck, unit test ve production build çalıştırır. GitHub Actions ayrıca temiz PostgreSQL 18 servisi üzerinde migration'ları ve `npm audit --audit-level=high` sonucunu doğrular.
+Bu komut sırasıyla ESLint, TypeScript typecheck, unit test ve production build çalıştırır. GitHub Actions ayrıca temiz PostgreSQL 18 servisi üzerinde migration'ları, `npm audit --audit-level=high` sonucunu ve Codespaces devcontainer/Compose yapılandırmasını doğrular.
 
 ## QR adresleri
 
