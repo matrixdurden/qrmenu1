@@ -1,14 +1,13 @@
 import { notFound } from "next/navigation";
 import { deleteSite, updateSiteGeneral } from "@/app/admin/site-actions";
+import { getAdminSiteOnly } from "@/lib/admin-queries";
 import { requireSiteAdmin } from "@/lib/auth";
-import { getAdminSite } from "@/lib/queries";
 
 export default async function GeneralPage({ params }: { params: Promise<{ siteId: string }> }) {
   const { siteId } = await params;
   const admin = await requireSiteAdmin(siteId);
-  const data = await getAdminSite(siteId);
-  if (!data) notFound();
-  const { site } = data;
+  const site = await getAdminSiteOnly(siteId);
+  if (!site) notFound();
   const alternateLocales = site.locales.filter((locale) => locale !== site.locale);
 
   return <div className="admin-page-grid">
