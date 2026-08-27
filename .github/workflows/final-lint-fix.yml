@@ -23,7 +23,8 @@ jobs:
 
           menu = Path('src/app/menu/[slug]/menu-client.tsx')
           text = menu.read_text()
-          text = text.replace('"use client";\n', '/* eslint-disable @next/next/no-img-element */\n"use client";\n', 1)
+          if not text.startswith('/* eslint-disable @next/next/no-img-element */'):
+              text = text.replace('"use client";\n', '/* eslint-disable @next/next/no-img-element */\n"use client";\n', 1)
           text = text.replace('type Product = MenuData["products"][number];\n', '', 1)
           old = '''  useEffect(() => {
             try {
@@ -34,7 +35,7 @@ jobs:
             } finally {
               setFavoritesReady(true);
             }
-          }, [site.id]);'''.replace('          ', '')
+          }, [site.id]);'''
           new = '''  useEffect(() => {
             const frame = requestAnimationFrame(() => {
               try {
@@ -47,7 +48,7 @@ jobs:
               }
             });
             return () => cancelAnimationFrame(frame);
-          }, [site.id]);'''.replace('          ', '')
+          }, [site.id]);'''
           if old not in text:
               raise SystemExit('Favorites effect block not found')
           text = text.replace(old, new, 1)
