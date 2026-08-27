@@ -52,7 +52,7 @@ function storageConfig(): StorageConfig | null {
     secretKey: process.env.OBJECT_STORAGE_SECRET_ACCESS_KEY,
     publicUrl: process.env.OBJECT_STORAGE_PUBLIC_URL?.replace(/\/$/, ""),
   };
-  const configured = Object.values(values).some(Boolean);
+  const configured = Boolean(values.endpoint || values.bucket || values.accessKey || values.secretKey || values.publicUrl);
   if (!configured) return null;
   if (!values.endpoint || !values.bucket || !values.accessKey || !values.secretKey || !values.publicUrl) {
     throw new Error("Object storage ayarları eksik. Endpoint, bucket, access key, secret key ve public URL birlikte verilmelidir.");
