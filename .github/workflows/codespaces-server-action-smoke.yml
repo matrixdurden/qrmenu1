@@ -1,0 +1,71 @@
+name: Codespaces Server Action smoke
+
+on:
+  push:
+    branches:
+      - fix/codespaces-server-actions-v2
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: qrmenu
+          POSTGRES_PASSWORD: qrmenu
+          POSTGRES_DB: qrmenu
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U qrmenu -d qrmenu"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://qrmenu:qrmenu@127.0.0.1:5432/qrmenu
+      NEXT_PUBLIC_APP_URL: https://test-codespace-3000.app.github.dev
+      GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN: app.github.dev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run db:migrate
+      - name: Start dev server
+        run: |
+          nohup npm run dev -- -H 127.0.0.1 > /tmp/qrmenu-dev.log 2>&1 &
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3000/api/health >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/qrmenu-dev.log
+          exit 1
+      - name: Submit setup Server Action through Codespaces proxy headers
+        run: |
+          curl -fsS http://127.0.0.1:3000/admin/setup -o /tmp/setup.html
+          ACTION_NAME=$(grep -o 'name="\$ACTION_ID_[^"]*"' /tmp/setup.html | head -n1 | sed 's/^name="//;s/"$//')
+          test -n "$ACTION_NAME"
+          STATUS=$(curl -sS -o /tmp/action-body -D /tmp/action-headers -w '%{http_code}' \
+            -X POST http://127.0.0.1:3000/admin/setup \
+            -H 'Origin: http://localhost:3000' \
+            -H 'X-Forwarded-Host: test-codespace-3000.app.github.dev' \
+            -F "$ACTION_NAME=" \
+            -F 'email=codespace-smoke@example.com' \
+            -F 'password=CodespaceSmoke123!' \
+            -F 'confirmPassword=CodespaceSmoke123!')
+          cat /tmp/action-headers
+          cat /tmp/action-body
+          test "$STATUS" != "500"
+          ! grep -q 'Invalid Server Actions request' /tmp/action-body
+      - name: Show server log
+        if: always()
+        run: tail -n 120 /tmp/qrmenu-dev.log || true
