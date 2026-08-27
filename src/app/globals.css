@@ -129,3 +129,13 @@ input:focus, textarea:focus, select:focus { border-color: #7a9b83; box-shadow: 0
   .danger-inline { align-items:flex-start; flex-direction:column; }
 }
 .fixed-order { justify-self:end; color:#909790; font-size:10px; font-weight:800; }
+
+
+/* Native lazy-loaded public media */
+.product-picture, .modal-image, .gallery-tile { position: relative; overflow: hidden; }
+.media-image { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.product-picture > .media-image, .modal-image > .media-image { z-index: 0; }
+.product-picture > :not(.media-image), .modal-image > :not(.media-image) { position: relative; z-index: 1; }
+.gallery-tile > .media-image { z-index: 0; }
+.gallery-tile > div { position: relative; z-index: 1; }
+.category-pill-image { width: 28px; height: 28px; border-radius: 999px; object-fit: cover; flex: 0 0 auto; }

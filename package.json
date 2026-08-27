@@ -11,10 +11,11 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "check": "npm run lint && npm run typecheck && npm run build",
+    "test": "tsx --test src/lib/*.test.ts",
+    "check": "npm run lint && npm run typecheck && npm test && npm run build",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:seed": "tsx --env-file=.env.local src/db/seed.ts",
+    "db:seed": "tsx --env-file=.env.local src/db/seed.ts && tsx --env-file=.env.local src/db/seed-finalize.ts",
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {

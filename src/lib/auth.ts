@@ -6,7 +6,7 @@ import { and, eq, gt } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
-import { adminSessions, adminUsers } from "@/db/schema";
+import { adminSessions, adminSiteAccess, adminUsers } from "@/db/schema";
 
 const scrypt = promisify(scryptCallback);
 const COOKIE_NAME = "qrmenu_session";
@@ -49,7 +49,7 @@ export async function getCurrentAdmin() {
   if (!session) return null;
 
   const [user] = await db
-    .select({ id: adminUsers.id, email: adminUsers.email })
+    .select({ id: adminUsers.id, email: adminUsers.email, role: adminUsers.role })
     .from(adminUsers)
     .where(eq(adminUsers.id, session.userId))
     .limit(1);
@@ -60,6 +60,28 @@ export async function requireAdmin() {
   if (!(await hasAdminUsers())) redirect("/admin/setup");
   const user = await getCurrentAdmin();
   if (!user) redirect("/admin/login");
+  return user;
+}
+
+export async function requireOwner() {
+  const user = await requireAdmin();
+  if (user.role !== "owner") redirect("/admin?error=forbidden");
+  return user;
+}
+
+export async function canAccessSite(user: NonNullable<Awaited<ReturnType<typeof getCurrentAdmin>>>, siteId: string) {
+  if (user.role === "owner") return true;
+  const [access] = await db
+    .select({ id: adminSiteAccess.id })
+    .from(adminSiteAccess)
+    .where(and(eq(adminSiteAccess.userId, user.id), eq(adminSiteAccess.siteId, siteId)))
+    .limit(1);
+  return Boolean(access);
+}
+
+export async function requireSiteAdmin(siteId: string) {
+  const user = await requireAdmin();
+  if (!(await canAccessSite(user, siteId))) redirect("/admin?error=forbidden");
   return user;
 }
 
