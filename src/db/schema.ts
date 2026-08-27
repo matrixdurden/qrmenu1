@@ -26,6 +26,34 @@ export type SiteTheme = {
   showHoursBadge?: boolean;
   heroOverlay?: number;
   fontFamily?: "system" | "serif" | "rounded";
+  terminology?: {
+    menuTitle?: string;
+    productsLabel?: string;
+    soldOutLabel?: string;
+    ingredientsLabel?: string;
+    allergensLabel?: string;
+    searchPlaceholder?: string;
+  };
+};
+
+export type LocalizedSiteCopy = {
+  name?: string;
+  subtitle?: string;
+  footerText?: string;
+};
+
+export type LocalizedCategoryCopy = {
+  name?: string;
+  description?: string;
+};
+
+export type LocalizedProductCopy = {
+  name?: string;
+  description?: string;
+  ingredients?: string;
+  allergens?: string;
+  note?: string;
+  badge?: string;
 };
 
 export const sites = pgTable(
@@ -37,8 +65,11 @@ export const sites = pgTable(
     subtitle: text("subtitle").notNull().default("Kitchen · Coffee · Lounge"),
     coverUrl: text("cover_url"),
     logoUrl: text("logo_url"),
+    customDomain: text("custom_domain"),
     currency: text("currency").notNull().default("TRY"),
     locale: text("locale").notNull().default("tr-TR"),
+    locales: jsonb("locales").$type<string[]>().notNull().default(["tr-TR"]),
+    translations: jsonb("translations").$type<Record<string, LocalizedSiteCopy>>().notNull().default({}),
     timezone: text("timezone").notNull().default("Europe/Istanbul"),
     wifiName: text("wifi_name"),
     wifiPassword: text("wifi_password"),
@@ -70,7 +101,10 @@ export const sites = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [uniqueIndex("sites_slug_idx").on(table.slug)],
+  (table) => [
+    uniqueIndex("sites_slug_idx").on(table.slug),
+    uniqueIndex("sites_custom_domain_idx").on(table.customDomain),
+  ],
 );
 
 export const siteSections = pgTable(
@@ -110,6 +144,7 @@ export const categories = pgTable(
     slug: text("slug").notNull(),
     description: text("description"),
     imageUrl: text("image_url"),
+    translations: jsonb("translations").$type<Record<string, LocalizedCategoryCopy>>().notNull().default({}),
     isActive: boolean("is_active").notNull().default(true),
     sortOrder: integer("sort_order").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -134,6 +169,7 @@ export const products = pgTable(
     note: text("note"),
     imageUrl: text("image_url"),
     badge: text("badge"),
+    translations: jsonb("translations").$type<Record<string, LocalizedProductCopy>>().notNull().default({}),
     priceKurus: integer("price_kurus").notNull(),
     compareAtPriceKurus: integer("compare_at_price_kurus"),
     isActive: boolean("is_active").notNull().default(true),
@@ -162,13 +198,13 @@ export const productCategories = pgTable(
   ],
 );
 
-
 export const adminUsers = pgTable(
   "admin_users",
   {
     id: uuid("id").defaultRandom().primaryKey(),
     email: text("email").notNull(),
     passwordHash: text("password_hash").notNull(),
+    role: text("role").notNull().default("owner"),
     failedLoginAttempts: integer("failed_login_attempts").notNull().default(0),
     lockedUntil: timestamp("locked_until", { withTimezone: true }),
     lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
@@ -191,4 +227,48 @@ export const adminSessions = pgTable(
     uniqueIndex("admin_sessions_token_idx").on(table.tokenHash),
     index("admin_sessions_user_idx").on(table.userId, table.expiresAt),
   ],
+);
+
+export const adminSiteAccess = pgTable(
+  "admin_site_access",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id").notNull().references(() => adminUsers.id, { onDelete: "cascade" }),
+    siteId: uuid("site_id").notNull().references(() => sites.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("admin_site_access_unique_idx").on(table.userId, table.siteId),
+    index("admin_site_access_site_idx").on(table.siteId),
+  ],
+);
+
+export const adminAuditLogs = pgTable(
+  "admin_audit_logs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id").references(() => adminUsers.id, { onDelete: "set null" }),
+    siteId: uuid("site_id").references(() => sites.id, { onDelete: "set null" }),
+    action: text("action").notNull(),
+    entityType: text("entity_type"),
+    entityId: text("entity_id"),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("admin_audit_site_idx").on(table.siteId, table.createdAt),
+    index("admin_audit_user_idx").on(table.userId, table.createdAt),
+  ],
+);
+
+export const authRateLimits = pgTable(
+  "auth_rate_limits",
+  {
+    key: text("key").primaryKey(),
+    attempts: integer("attempts").notNull().default(0),
+    windowStartedAt: timestamp("window_started_at", { withTimezone: true }).notNull().defaultNow(),
+    blockedUntil: timestamp("blocked_until", { withTimezone: true }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("auth_rate_limits_blocked_idx").on(table.blockedUntil)],
 );
