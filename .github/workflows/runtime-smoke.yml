@@ -1,0 +1,129 @@
+name: Runtime smoke test
+
+on:
+  push:
+    branches:
+      - test/runtime-smoke-20260827
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: qrmenu
+          POSTGRES_PASSWORD: qrmenu
+          POSTGRES_DB: qrmenu
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U qrmenu -d qrmenu"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://qrmenu:qrmenu@127.0.0.1:5432/qrmenu
+      NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
+      NODE_ENV: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Prepare environment
+        run: |
+          printf 'DATABASE_URL=%s\nNEXT_PUBLIC_APP_URL=%s\n' "$DATABASE_URL" "$NEXT_PUBLIC_APP_URL" > .env.local
+
+      - name: Migrate and seed PostgreSQL
+        run: |
+          npm run db:migrate
+          npm run db:seed
+
+      - name: Verify seeded database
+        run: |
+          node <<'NODE'
+          const { Client } = require('pg');
+          (async () => {
+            const client = new Client({ connectionString: process.env.DATABASE_URL });
+            await client.connect();
+            const queries = {
+              sites: 'select count(*)::int as count from sites',
+              categories: 'select count(*)::int as count from categories',
+              products: 'select count(*)::int as count from products',
+              sections: 'select count(*)::int as count from site_sections',
+              links: 'select count(*)::int as count from product_categories'
+            };
+            const counts = {};
+            for (const [name, sql] of Object.entries(queries)) {
+              counts[name] = (await client.query(sql)).rows[0].count;
+            }
+            console.log('Seed counts:', counts);
+            if (counts.sites !== 1) throw new Error(`Expected 1 site, got ${counts.sites}`);
+            if (counts.categories < 8) throw new Error(`Expected at least 8 categories, got ${counts.categories}`);
+            if (counts.products !== 20) throw new Error(`Expected 20 products, got ${counts.products}`);
+            if (counts.sections < 8) throw new Error(`Expected at least 8 sections, got ${counts.sections}`);
+            if (counts.links < 20) throw new Error(`Expected product/category links, got ${counts.links}`);
+            await client.end();
+          })().catch((error) => {
+            console.error(error);
+            process.exit(1);
+          });
+          NODE
+
+      - name: Build production app
+        run: npm run build
+
+      - name: Start app and run HTTP smoke checks
+        run: |
+          set -euo pipefail
+          npm run start -- -H 127.0.0.1 > /tmp/qrmenu.log 2>&1 &
+          APP_PID=$!
+          trap 'kill "$APP_PID" 2>/dev/null || true; cat /tmp/qrmenu.log' EXIT
+
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:3000/api/health >/tmp/health.json; then
+              break
+            fi
+            sleep 1
+          done
+
+          curl -fsS http://127.0.0.1:3000/api/health | tee /tmp/health.json
+          curl -fsS http://127.0.0.1:3000/api/ready | tee /tmp/ready.json
+
+          curl -fsS http://127.0.0.1:3000/menu/mira -o /tmp/menu.html
+          grep -q 'MIRA' /tmp/menu.html
+          grep -q 'Mira Burger' /tmp/menu.html
+
+          SITE_ID=$(node -e "const{Client}=require('pg');(async()=>{const c=new Client({connectionString:process.env.DATABASE_URL});await c.connect();const r=await c.query(\"select id from sites where slug='mira' limit 1\");console.log(r.rows[0].id);await c.end()})().catch(e=>{console.error(e);process.exit(1)})")
+          echo "Seeded site id: $SITE_ID"
+
+          curl -fsSL "http://127.0.0.1:3000/m/$SITE_ID" -o /tmp/stable-menu.html
+          grep -q 'MIRA' /tmp/stable-menu.html
+
+          curl -fsS "http://127.0.0.1:3000/api/qr/$SITE_ID" -o /tmp/qr.svg
+          grep -q '<svg' /tmp/qr.svg
+
+          ADMIN_FINAL=$(curl -LsS -o /tmp/admin.html -w '%{url_effective}' http://127.0.0.1:3000/admin)
+          echo "Admin final URL: $ADMIN_FINAL"
+          case "$ADMIN_FINAL" in
+            */admin/setup|*/admin/login) ;;
+            *) echo "Unexpected admin destination: $ADMIN_FINAL"; exit 1 ;;
+          esac
+
+          ROOT_CODE=$(curl -LsS -o /tmp/root.html -w '%{http_code}' http://127.0.0.1:3000/)
+          test "$ROOT_CODE" = "200"
+
+          echo 'Runtime smoke test passed.'
