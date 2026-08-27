@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { updateBusinessHours } from "@/app/admin/site-actions";
+import { getAdminSiteHours } from "@/lib/admin-queries";
 import { requireSiteAdmin } from "@/lib/auth";
-import { getAdminSite } from "@/lib/queries";
 
 const days = [
   { id: 1, name: "Pazartesi" }, { id: 2, name: "Salı" }, { id: 3, name: "Çarşamba" },
@@ -11,7 +11,7 @@ const days = [
 export default async function HoursPage({ params }: { params: Promise<{ siteId: string }> }) {
   const { siteId } = await params;
   await requireSiteAdmin(siteId);
-  const data = await getAdminSite(siteId);
+  const data = await getAdminSiteHours(siteId);
   if (!data) notFound();
   return <section className="panel">
     <div className="admin-subhead"><div><span className="eyebrow">ÇALIŞMA SAATLERİ</span><h2>Haftalık program</h2></div><span className="status-pill">{data.site.timezone}</span></div>
