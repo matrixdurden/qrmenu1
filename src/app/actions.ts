@@ -1,14 +1,14 @@
 "use server";
 
 import { and, eq, inArray, ne } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/db";
 import { businessHours, categories, productCategories, products, sites, siteSections, type SiteTheme } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth";
 import { slugify } from "@/lib/slugify";
-import { saveImageUpload } from "@/lib/uploads";
+import { deleteLocalUpload, deleteSiteUploads, saveImageUpload } from "@/lib/uploads";
 
 const text = (value: FormDataEntryValue | null) => String(value ?? "").trim();
 const nullable = (value: FormDataEntryValue | null) => text(value) || null;
@@ -78,6 +78,9 @@ function revalidateSite(siteId: string, slug: string) {
   revalidatePath("/admin");
   revalidatePath(`/admin/sites/${siteId}`);
   revalidatePath(`/menu/${slug}`);
+  revalidatePath(`/m/${siteId}`);
+  updateTag(`menu-site:${siteId}`);
+  updateTag(`menu-slug:${slug}`);
 }
 
 export async function createSite(formData: FormData) {
@@ -111,6 +114,8 @@ export async function updateSite(formData: FormData) {
   const slug = await uniqueSiteSlug(text(formData.get("slug")) || current.slug, siteId);
   const coverUpload = await saveImageUpload(siteId, formData.get("coverFile"), "cover");
   const logoUpload = await saveImageUpload(siteId, formData.get("logoFile"), "logo");
+  const nextCoverUrl = coverUpload ?? nullable(formData.get("coverUrl"));
+  const nextLogoUrl = logoUpload ?? nullable(formData.get("logoUrl"));
   const fontValue = text(formData.get("fontFamily"));
   const fontFamily: SiteTheme["fontFamily"] = fontValue === "serif" || fontValue === "rounded" ? fontValue : "system";
   const heroOverlayInput = Number(formData.get("heroOverlay"));
@@ -133,32 +138,43 @@ export async function updateSite(formData: FormData) {
     fontFamily,
   };
 
-  await db.update(sites).set({
-    name: text(formData.get("name")) || current.name,
-    slug,
-    subtitle: text(formData.get("subtitle")),
-    coverUrl: coverUpload ?? nullable(formData.get("coverUrl")),
-    logoUrl: logoUpload ?? nullable(formData.get("logoUrl")),
-    wifiName: nullable(formData.get("wifiName")),
-    wifiPassword: nullable(formData.get("wifiPassword")),
-    phone: nullable(formData.get("phone")),
-    address: nullable(formData.get("address")),
-    instagram: nullable(formData.get("instagram")),
-    whatsapp: nullable(formData.get("whatsapp")),
-    facebook: nullable(formData.get("facebook")),
-    tiktok: nullable(formData.get("tiktok")),
-    website: nullable(formData.get("website")),
-    footerText: nullable(formData.get("footerText")),
-    currency: text(formData.get("currency")) || "TRY",
-    locale: text(formData.get("locale")) || "tr-TR",
-    timezone: text(formData.get("timezone")) || "Europe/Istanbul",
-    isActive: checked(formData.get("isActive")),
-    theme,
-    updatedAt: new Date(),
-  }).where(eq(sites.id, siteId));
+  try {
+    await db.update(sites).set({
+      name: text(formData.get("name")) || current.name,
+      slug,
+      subtitle: text(formData.get("subtitle")),
+      coverUrl: nextCoverUrl,
+      logoUrl: nextLogoUrl,
+      wifiName: nullable(formData.get("wifiName")),
+      wifiPassword: nullable(formData.get("wifiPassword")),
+      phone: nullable(formData.get("phone")),
+      address: nullable(formData.get("address")),
+      instagram: nullable(formData.get("instagram")),
+      whatsapp: nullable(formData.get("whatsapp")),
+      facebook: nullable(formData.get("facebook")),
+      tiktok: nullable(formData.get("tiktok")),
+      website: nullable(formData.get("website")),
+      footerText: nullable(formData.get("footerText")),
+      currency: text(formData.get("currency")) || "TRY",
+      locale: text(formData.get("locale")) || "tr-TR",
+      timezone: text(formData.get("timezone")) || "Europe/Istanbul",
+      isActive: checked(formData.get("isActive")),
+      theme,
+      updatedAt: new Date(),
+    }).where(eq(sites.id, siteId));
+  } catch (error) {
+    await Promise.all([deleteLocalUpload(coverUpload), deleteLocalUpload(logoUpload)]);
+    throw error;
+  }
+
+  if (current.coverUrl !== nextCoverUrl) await deleteLocalUpload(current.coverUrl);
+  if (current.logoUrl !== nextLogoUrl) await deleteLocalUpload(current.logoUrl);
 
   revalidateSite(siteId, current.slug);
-  if (slug !== current.slug) revalidatePath(`/menu/${slug}`);
+  if (slug !== current.slug) {
+    revalidatePath(`/menu/${slug}`);
+    updateTag(`menu-slug:${slug}`);
+  }
 }
 
 export async function updateBusinessHours(formData: FormData) {
@@ -206,15 +222,20 @@ export async function createCategory(formData: FormData) {
     if (!parent) throw new Error("Üst kategori geçersiz.");
   }
   const imageUpload = await saveImageUpload(siteId, formData.get("imageFile"), "category");
-  await db.insert(categories).values({
-    siteId,
-    parentId,
-    name,
-    slug: await uniqueCategorySlug(siteId, text(formData.get("slug")) || name),
-    description: nullable(formData.get("description")),
-    imageUrl: imageUpload ?? nullable(formData.get("imageUrl")),
-    sortOrder: Number(formData.get("sortOrder")) || 0,
-  });
+  try {
+    await db.insert(categories).values({
+      siteId,
+      parentId,
+      name,
+      slug: await uniqueCategorySlug(siteId, text(formData.get("slug")) || name),
+      description: nullable(formData.get("description")),
+      imageUrl: imageUpload ?? nullable(formData.get("imageUrl")),
+      sortOrder: Number(formData.get("sortOrder")) || 0,
+    });
+  } catch (error) {
+    await deleteLocalUpload(imageUpload);
+    throw error;
+  }
   revalidateSite(siteId, site.slug);
 }
 
@@ -238,17 +259,24 @@ export async function updateCategory(formData: FormData) {
     if (!byId.has(parentId)) throw new Error("Üst kategori geçersiz.");
   }
   const imageUpload = await saveImageUpload(siteId, formData.get("imageFile"), "category");
+  const nextImageUrl = imageUpload ?? nullable(formData.get("imageUrl"));
   const name = text(formData.get("name")) || current.name;
-  await db.update(categories).set({
-    name,
-    slug: await uniqueCategorySlug(siteId, text(formData.get("slug")) || name, categoryId),
-    parentId,
-    description: nullable(formData.get("description")),
-    imageUrl: imageUpload ?? nullable(formData.get("imageUrl")),
-    isActive: checked(formData.get("isActive")),
-    sortOrder: Number(formData.get("sortOrder")) || 0,
-    updatedAt: new Date(),
-  }).where(and(eq(categories.id, categoryId), eq(categories.siteId, siteId)));
+  try {
+    await db.update(categories).set({
+      name,
+      slug: await uniqueCategorySlug(siteId, text(formData.get("slug")) || name, categoryId),
+      parentId,
+      description: nullable(formData.get("description")),
+      imageUrl: nextImageUrl,
+      isActive: checked(formData.get("isActive")),
+      sortOrder: Number(formData.get("sortOrder")) || 0,
+      updatedAt: new Date(),
+    }).where(and(eq(categories.id, categoryId), eq(categories.siteId, siteId)));
+  } catch (error) {
+    await deleteLocalUpload(imageUpload);
+    throw error;
+  }
+  if (current.imageUrl !== nextImageUrl) await deleteLocalUpload(current.imageUrl);
   revalidateSite(siteId, site.slug);
 }
 
@@ -257,10 +285,13 @@ export async function deleteCategory(formData: FormData) {
   const siteId = text(formData.get("siteId"));
   const categoryId = text(formData.get("categoryId"));
   const site = await getSite(siteId);
+  const [current] = await db.select({ imageUrl: categories.imageUrl }).from(categories).where(and(eq(categories.id, categoryId), eq(categories.siteId, siteId))).limit(1);
+  if (!current) throw new Error("Kategori bulunamadı.");
   await db.transaction(async (tx) => {
     await tx.update(categories).set({ parentId: null }).where(and(eq(categories.siteId, siteId), eq(categories.parentId, categoryId)));
     await tx.delete(categories).where(and(eq(categories.id, categoryId), eq(categories.siteId, siteId)));
   });
+  await deleteLocalUpload(current.imageUrl);
   revalidateSite(siteId, site.slug);
 }
 
@@ -279,26 +310,31 @@ export async function createProduct(formData: FormData) {
   const imageUpload = await saveImageUpload(siteId, formData.get("imageFile"), "product");
   const valid = await validCategoryIds(siteId, formData);
 
-  await db.transaction(async (tx) => {
-    const [product] = await tx.insert(products).values({
-      siteId,
-      name,
-      slug: await uniqueProductSlug(siteId, text(formData.get("slug")) || name),
-      description: nullable(formData.get("description")),
-      ingredients: nullable(formData.get("ingredients")),
-      allergens: nullable(formData.get("allergens")),
-      note: nullable(formData.get("note")),
-      imageUrl: imageUpload ?? nullable(formData.get("imageUrl")),
-      badge: nullable(formData.get("badge")),
-      priceKurus: moneyToKurus(formData.get("price"))!,
-      compareAtPriceKurus: moneyToKurus(formData.get("compareAtPrice"), false),
-      isActive: checked(formData.get("isActive")),
-      isAvailable: checked(formData.get("isAvailable")),
-      isFeatured: checked(formData.get("isFeatured")),
-      sortOrder: Number(formData.get("sortOrder")) || 0,
-    }).returning({ id: products.id });
-    if (valid.length) await tx.insert(productCategories).values(valid.map((category, sortOrder) => ({ productId: product.id, categoryId: category.id, sortOrder })));
-  });
+  try {
+    await db.transaction(async (tx) => {
+      const [product] = await tx.insert(products).values({
+        siteId,
+        name,
+        slug: await uniqueProductSlug(siteId, text(formData.get("slug")) || name),
+        description: nullable(formData.get("description")),
+        ingredients: nullable(formData.get("ingredients")),
+        allergens: nullable(formData.get("allergens")),
+        note: nullable(formData.get("note")),
+        imageUrl: imageUpload ?? nullable(formData.get("imageUrl")),
+        badge: nullable(formData.get("badge")),
+        priceKurus: moneyToKurus(formData.get("price"))!,
+        compareAtPriceKurus: moneyToKurus(formData.get("compareAtPrice"), false),
+        isActive: checked(formData.get("isActive")),
+        isAvailable: checked(formData.get("isAvailable")),
+        isFeatured: checked(formData.get("isFeatured")),
+        sortOrder: Number(formData.get("sortOrder")) || 0,
+      }).returning({ id: products.id });
+      if (valid.length) await tx.insert(productCategories).values(valid.map((category, sortOrder) => ({ productId: product.id, categoryId: category.id, sortOrder })));
+    });
+  } catch (error) {
+    await deleteLocalUpload(imageUpload);
+    throw error;
+  }
   revalidateSite(siteId, site.slug);
 }
 
@@ -311,29 +347,36 @@ export async function updateProduct(formData: FormData) {
   if (!current) throw new Error("Ürün bulunamadı.");
   const name = text(formData.get("name")) || current.name;
   const imageUpload = await saveImageUpload(siteId, formData.get("imageFile"), "product");
+  const nextImageUrl = imageUpload ?? nullable(formData.get("imageUrl"));
   const valid = await validCategoryIds(siteId, formData);
 
-  await db.transaction(async (tx) => {
-    await tx.update(products).set({
-      name,
-      slug: await uniqueProductSlug(siteId, text(formData.get("slug")) || name, productId),
-      description: nullable(formData.get("description")),
-      ingredients: nullable(formData.get("ingredients")),
-      allergens: nullable(formData.get("allergens")),
-      note: nullable(formData.get("note")),
-      imageUrl: imageUpload ?? nullable(formData.get("imageUrl")),
-      badge: nullable(formData.get("badge")),
-      priceKurus: moneyToKurus(formData.get("price"))!,
-      compareAtPriceKurus: moneyToKurus(formData.get("compareAtPrice"), false),
-      isActive: checked(formData.get("isActive")),
-      isAvailable: checked(formData.get("isAvailable")),
-      isFeatured: checked(formData.get("isFeatured")),
-      sortOrder: Number(formData.get("sortOrder")) || 0,
-      updatedAt: new Date(),
-    }).where(and(eq(products.id, productId), eq(products.siteId, siteId)));
-    await tx.delete(productCategories).where(eq(productCategories.productId, productId));
-    if (valid.length) await tx.insert(productCategories).values(valid.map((category, sortOrder) => ({ productId, categoryId: category.id, sortOrder })));
-  });
+  try {
+    await db.transaction(async (tx) => {
+      await tx.update(products).set({
+        name,
+        slug: await uniqueProductSlug(siteId, text(formData.get("slug")) || name, productId),
+        description: nullable(formData.get("description")),
+        ingredients: nullable(formData.get("ingredients")),
+        allergens: nullable(formData.get("allergens")),
+        note: nullable(formData.get("note")),
+        imageUrl: nextImageUrl,
+        badge: nullable(formData.get("badge")),
+        priceKurus: moneyToKurus(formData.get("price"))!,
+        compareAtPriceKurus: moneyToKurus(formData.get("compareAtPrice"), false),
+        isActive: checked(formData.get("isActive")),
+        isAvailable: checked(formData.get("isAvailable")),
+        isFeatured: checked(formData.get("isFeatured")),
+        sortOrder: Number(formData.get("sortOrder")) || 0,
+        updatedAt: new Date(),
+      }).where(and(eq(products.id, productId), eq(products.siteId, siteId)));
+      await tx.delete(productCategories).where(eq(productCategories.productId, productId));
+      if (valid.length) await tx.insert(productCategories).values(valid.map((category, sortOrder) => ({ productId, categoryId: category.id, sortOrder })));
+    });
+  } catch (error) {
+    await deleteLocalUpload(imageUpload);
+    throw error;
+  }
+  if (current.imageUrl !== nextImageUrl) await deleteLocalUpload(current.imageUrl);
   revalidateSite(siteId, site.slug);
 }
 
@@ -342,7 +385,10 @@ export async function deleteProduct(formData: FormData) {
   const siteId = text(formData.get("siteId"));
   const productId = text(formData.get("productId"));
   const site = await getSite(siteId);
+  const [current] = await db.select({ imageUrl: products.imageUrl }).from(products).where(and(eq(products.id, productId), eq(products.siteId, siteId))).limit(1);
+  if (!current) throw new Error("Ürün bulunamadı.");
   await db.delete(products).where(and(eq(products.id, productId), eq(products.siteId, siteId)));
+  await deleteLocalUpload(current.imageUrl);
   revalidateSite(siteId, site.slug);
 }
 
@@ -352,6 +398,9 @@ export async function deleteSite(formData: FormData) {
   const site = await getSite(siteId);
   if (text(formData.get("confirmSlug")) !== site.slug) throw new Error("Site silme onayı geçersiz.");
   await db.delete(sites).where(eq(sites.id, siteId));
+  await deleteSiteUploads(siteId);
   revalidatePath("/admin");
+  updateTag(`menu-site:${siteId}`);
+  updateTag(`menu-slug:${site.slug}`);
   redirect("/admin");
 }
