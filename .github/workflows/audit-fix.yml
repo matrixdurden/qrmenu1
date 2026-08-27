@@ -1,0 +1,35 @@
+name: One-shot dependency audit fix
+
+on:
+  push:
+    branches:
+      - feature/complete-platform
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/complete-platform
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm audit fix
+      - name: Commit safe dependency fixes
+        run: |
+          if git diff --quiet -- package.json package-lock.json; then
+            echo "No nonbreaking audit fixes available."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json
+          git commit -m "security: apply nonbreaking npm audit fixes"
+          git push origin HEAD:feature/complete-platform
