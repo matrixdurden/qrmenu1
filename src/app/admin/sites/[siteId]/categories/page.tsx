@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { createCategory, deleteCategory, updateCategory } from "@/app/admin/site-actions";
+import { getAdminSiteCategories } from "@/lib/admin-queries";
 import { requireSiteAdmin } from "@/lib/auth";
-import { getAdminSite } from "@/lib/queries";
 
 function categoryDepth(id: string, rows: { id: string; parentId: string | null }[]) {
   let depth = 0;
@@ -16,7 +16,7 @@ function categoryDepth(id: string, rows: { id: string; parentId: string | null }
 export default async function CategoriesPage({ params }: { params: Promise<{ siteId: string }> }) {
   const { siteId } = await params;
   await requireSiteAdmin(siteId);
-  const data = await getAdminSite(siteId);
+  const data = await getAdminSiteCategories(siteId);
   if (!data) notFound();
   const { site, categories } = data;
   const altLocales = site.locales.filter((locale) => locale !== site.locale);
