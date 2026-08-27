@@ -6,6 +6,7 @@ node_modules
 .tools
 uploads
 *.log
+*.tsbuildinfo
 .DS_Store
 
 public/uploads/*

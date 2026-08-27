@@ -3,16 +3,20 @@ import { toString } from "qrcode";
 import { db } from "@/db";
 import { sites } from "@/db/schema";
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request, { params }: { params: Promise<{ siteId: string }> }) {
   const { siteId } = await params;
+  if (!UUID_PATTERN.test(siteId)) return new Response("QR menu not found", { status: 404 });
+
   const [site] = await db.select({ name: sites.name, slug: sites.slug }).from(sites).where(eq(sites.id, siteId)).limit(1);
   if (!site) return new Response("QR menu not found", { status: 404 });
 
   const requestUrl = new URL(request.url);
   const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || requestUrl.origin).replace(/\/$/, "");
-  const menuUrl = `${baseUrl}/menu/${site.slug}`;
+  const menuUrl = `${baseUrl}/m/${siteId}`;
   const svg = await toString(menuUrl, {
     type: "svg",
     errorCorrectionLevel: "M",
@@ -27,6 +31,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ site
     headers: {
       "Content-Type": "image/svg+xml; charset=utf-8",
       "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff",
       ...(download ? { "Content-Disposition": `attachment; filename="${safeName}-qr.svg"` } : {}),
     },
   });

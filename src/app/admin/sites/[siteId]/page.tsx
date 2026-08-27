@@ -42,7 +42,7 @@ export default async function SiteEditor({ params }: { params: Promise<{ siteId:
   if (!data) notFound();
   const { site, categories, products, productCategories, hours, sections } = data;
   const publicBase = (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "");
-  const publicUrl = `${publicBase}/menu/${site.slug}`;
+  const publicUrl = `${publicBase}/m/${site.id}`;
 
   return (
     <main className="admin-shell editor-shell">
