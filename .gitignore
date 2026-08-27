@@ -1,0 +1,12 @@
+node_modules
+.next
+.env
+.env.local
+.env.*.local
+.tools
+uploads
+*.log
+.DS_Store
+
+public/uploads/*
+!public/uploads/.gitkeep
