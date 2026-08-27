@@ -1,0 +1,31 @@
+services:
+  app:
+    image: mcr.microsoft.com/devcontainers/javascript-node:1-24-bookworm
+    command: sleep infinity
+    volumes:
+      - ..:/workspaces/qrmenu1:cached
+    environment:
+      DATABASE_URL: postgresql://qrmenu:qrmenu@db:5432/qrmenu
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: qrmenu
+      POSTGRES_USER: qrmenu
+      POSTGRES_PASSWORD: qrmenu
+      PGDATA: /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U qrmenu -d qrmenu"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - qrmenu-postgres:/var/lib/postgresql/data
+
+volumes:
+  qrmenu-postgres:
